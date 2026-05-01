@@ -1,0 +1,33 @@
+[Unit]
+Description=ModSecurity Prometheus exporter
+After=apache2.service
+Wants=apache2.service
+
+[Service]
+Type=simple
+User=modsec-exporter
+Group=adm
+ExecStart=/usr/local/bin/modsec-exporter \
+  --access-log /var/log/apache2/access.log \
+  --error-log  /var/log/apache2/error.log \
+  --listen     127.0.0.1:9555 \
+  --mmdb       /var/lib/geoip/country.mmdb
+Restart=on-failure
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadOnlyPaths=/var/log/apache2 /var/lib/geoip
+RestrictAddressFamilies=AF_INET AF_INET6
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

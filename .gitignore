@@ -1,0 +1,10 @@
+bin/
+# Stray binaries from `go build ./cmd/<name>` without -o
+/modsec-exporter
+/loggen
+*.test
+*.out
+coverage.out
+.DS_Store
+test/fixtures/*.log
+!test/fixtures/.gitkeep

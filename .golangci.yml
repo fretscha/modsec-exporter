@@ -1,0 +1,24 @@
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/fretscha/modsec-exporter
+
+issues:
+  # Don't apply unused-parameter style nags to test files.
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck

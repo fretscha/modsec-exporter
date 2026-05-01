@@ -1,0 +1,10 @@
+modsec-exporter
+Copyright 2026 fretscha and contributors
+
+This product includes software developed by the contributors of modsec-exporter.
+
+Third-party dependencies and their licenses are listed in go.mod and go.sum.
+A summary of the major direct dependencies:
+- github.com/prometheus/client_golang  (Apache-2.0)
+- github.com/nxadm/tail                (MIT)
+- github.com/oschwald/maxminddb-golang (ISC)

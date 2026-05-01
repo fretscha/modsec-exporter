@@ -1,0 +1,136 @@
+# modsec-exporter
+
+[![CI](https://github.com/fretscha/modsec-exporter/actions/workflows/ci.yml/badge.svg)](https://github.com/fretscha/modsec-exporter/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/fretscha/modsec-exporter.svg)](https://pkg.go.dev/github.com/fretscha/modsec-exporter)
+[![Go Report Card](https://goreportcard.com/badge/github.com/fretscha/modsec-exporter)](https://goreportcard.com/report/github.com/fretscha/modsec-exporter)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
+Prometheus exporter that tails Apache access logs and ModSecurity / OWASP CRS 4.x error logs and exposes:
+
+- **Service RED metrics** — request rate, error rate, latency, response size, country breakdown.
+- **WAF metrics** — rule trigger counts, severity / paranoia-level / attack-category breakdowns, anomaly score histograms.
+- **A targeted "blocked vs. passed" join** keyed by Apache `unique_id`: for every rule fired, what HTTP status class did the request return?
+- **Top-N attackers** — bounded gauge of the most active attacker IPs, with country / ASN.
+
+For deeper investigation (per-IP / per-URI / per-rule-message drill-down), pair this exporter with a separate batch log-analysis tool of your choice — modsec-exporter deliberately keeps high-cardinality dimensions out of Prometheus to bound time-series count.
+
+## Quickstart
+
+Install via `go install`:
+
+```bash
+go install github.com/fretscha/modsec-exporter/cmd/modsec-exporter@latest
+modsec-exporter \
+  --access-log /var/log/apache2/access.log \
+  --error-log  /var/log/apache2/error.log \
+  --listen     :9555
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/fretscha/modsec-exporter.git
+cd modsec-exporter
+make build
+./bin/modsec-exporter \
+  --access-log /var/log/apache2/access.log \
+  --error-log  /var/log/apache2/error.log \
+  --listen     :9555
+```
+
+## Configuration
+
+| Flag | Env | Default | Notes |
+|---|---|---|---|
+| `--access-log` | `MODSEC_EXPORTER_ACCESS_LOG` | — | required |
+| `--error-log` | `MODSEC_EXPORTER_ERROR_LOG` | — | required |
+| `--listen` | `MODSEC_EXPORTER_LISTEN` | `:9555` | |
+| `--mmdb` | `MODSEC_EXPORTER_MMDB` | `""` | empty disables GeoIP fallback |
+| `--top-n` | — | `50` | `0` disables |
+| `--buffer-size` | — | `50000` | join buffer cap |
+| `--buffer-ttl` | — | `60s` | orphan threshold |
+| `--sweep-interval` | — | `10s` | TTL sweep cadence |
+| `--replay` | — | `false` | one-shot file read; metrics endpoint stays up until SIGINT/SIGTERM |
+
+## Headline PromQL
+
+Fraction of times a CRS rule actually blocked the request (vs. just warned in DetectionOnly mode):
+
+```promql
+sum by(rule_id)(rate(modsec_request_outcome_total{status_class="4xx"}[5m]))
+  / sum by(rule_id)(rate(modsec_request_outcome_total[5m]))
+```
+
+Top attacking countries by 4xx rate:
+
+```promql
+topk(10, sum by(country)(rate(http_requests_by_country_total{status_class="4xx"}[15m])))
+```
+
+False-positive-suspect rules — high firing rate, low block ratio:
+
+```promql
+(
+  sum by(rule_id)(rate(modsec_rule_triggered_total[15m]))
+) > 1
+and on(rule_id)
+(
+  sum by(rule_id)(rate(modsec_request_outcome_total{status_class="4xx"}[15m]))
+    / sum by(rule_id)(rate(modsec_request_outcome_total[15m]))
+) < 0.1
+```
+
+## Cardinality
+
+Worst case ~18k series for a single Apache with 5 vhosts and full CRS 4.x. See [the design doc](docs/design/2026-04-29-modsec-prom-exporter-design.md#cardinality-budget) for the breakdown.
+
+`client_ip`, `uri`, `user_agent`, and `msg` are deliberately not exposed as labels (except `client_ip` inside the bounded Top-N gauge). For per-IP / per-URI investigation, pair this exporter with a batch log-analysis tool that can handle unbounded cardinality.
+
+## Development
+
+```bash
+make test     # unit + integration
+make smoke    # e2e replay smoke against test/fixtures
+make lint
+```
+
+Smoke fixtures are gitignored. Copy them in before running:
+
+```bash
+cp /path/to/your/access.log test/fixtures/access.log
+cp /path/to/your/error.log  test/fixtures/error.log
+```
+
+## Container
+
+```bash
+docker build -t modsec-exporter:dev -f docker/Dockerfile .
+docker run --rm -v /var/log/apache2:/logs:ro -p 9555:9555 modsec-exporter:dev \
+  --access-log /logs/access.log --error-log /logs/error.log
+```
+
+## Systemd
+
+A hardened unit is provided at `deploy/modsec-exporter.service`. To install:
+
+```bash
+sudo cp bin/modsec-exporter /usr/local/bin/
+sudo useradd -r -s /usr/sbin/nologin modsec-exporter
+sudo usermod -aG adm modsec-exporter        # for log read access
+sudo cp deploy/modsec-exporter.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now modsec-exporter
+```
+
+## Prometheus scrape
+
+```yaml
+- job_name: modsec
+  scrape_interval: 30s
+  static_configs:
+    - targets: ['apache-host-1:9555']
+```
+
+## License
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
