@@ -16,7 +16,7 @@ type Tailer interface {
 // Run wires a Tailer to onLine / onError callbacks until ctx is cancelled
 // or the lines channel closes. Used by main.go.
 func Run(ctx context.Context, t Tailer, onLine func(string), onError func(error)) {
-	defer t.Close()
+	defer func() { _ = t.Close() }()
 	for {
 		select {
 		case <-ctx.Done():

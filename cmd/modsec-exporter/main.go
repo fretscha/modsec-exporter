@@ -58,7 +58,7 @@ func main() {
 			log.Printf("[WARN] mmdb open failed: %v — running with geoip disabled", err)
 			m.GeoIPLookups.WithLabelValues("disabled").Inc()
 		} else {
-			defer mm.Close()
+			defer func() { _ = mm.Close() }()
 			lookup = mm
 		}
 	}
@@ -111,7 +111,10 @@ func main() {
 		defer wg.Done()
 		tail.Run(ctx, accessTailer,
 			func(line string) { agg.OnRawAccess(line); atomic.AddUint64(&seen, 1) },
-			func(err error) { m.TailErrors.WithLabelValues("access").Inc(); log.Printf("[WARN] access tail: %v", err) },
+			func(err error) {
+				m.TailErrors.WithLabelValues("access").Inc()
+				log.Printf("[WARN] access tail: %v", err)
+			},
 		)
 	}()
 	go func() {

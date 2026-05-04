@@ -29,8 +29,8 @@ type ErrorEvent struct {
 	Timestamp     time.Time
 	ClientIP      string
 	UniqueID      string
-	RuleID        string   // numeric string
-	Severity      string   // NOTICE | WARNING | ERROR | CRITICAL | ALERT (uppercase)
+	RuleID        string // numeric string
+	Severity      string // NOTICE | WARNING | ERROR | CRITICAL | ALERT (uppercase)
 	Hostname      string
 	URI           string
 	ParanoiaLevel string   // "1".."4" or "" when not tagged
