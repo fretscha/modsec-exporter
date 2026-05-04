@@ -19,9 +19,9 @@ For deeper investigation (per-IP / per-URI / per-rule-message drill-down), pair 
 **Option 1 — pre-built binary** (Linux amd64/arm64, statically linked):
 
 ```bash
-# replace v0.2.0 and linux-amd64 as needed
+# replace v0.3.0 and linux-amd64 as needed
 curl -Lo modsec-exporter \
-  https://github.com/fretscha/modsec-exporter/releases/download/v0.2.0/modsec-exporter-linux-amd64
+  https://github.com/fretscha/modsec-exporter/releases/download/v0.3.0/modsec-exporter-linux-amd64
 chmod +x modsec-exporter
 ./modsec-exporter \
   --access-log /var/log/apache2/access.log \
