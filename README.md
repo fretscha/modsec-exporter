@@ -16,7 +16,22 @@ For deeper investigation (per-IP / per-URI / per-rule-message drill-down), pair 
 
 ## Quickstart
 
-Install via `go install`:
+**Option 1 — pre-built binary** (Linux amd64/arm64, statically linked):
+
+```bash
+# replace v0.2.0 and linux-amd64 as needed
+curl -Lo modsec-exporter \
+  https://github.com/fretscha/modsec-exporter/releases/download/v0.2.0/modsec-exporter-linux-amd64
+chmod +x modsec-exporter
+./modsec-exporter \
+  --access-log /var/log/apache2/access.log \
+  --error-log  /var/log/apache2/error.log \
+  --listen     :9555
+```
+
+Verify with the bundled `checksums.txt` from the [release page](https://github.com/fretscha/modsec-exporter/releases/latest).
+
+**Option 2 — go install**:
 
 ```bash
 go install github.com/fretscha/modsec-exporter/cmd/modsec-exporter@latest
@@ -26,7 +41,7 @@ modsec-exporter \
   --listen     :9555
 ```
 
-Or build from source:
+**Option 3 — build from source**:
 
 ```bash
 git clone https://github.com/fretscha/modsec-exporter.git
