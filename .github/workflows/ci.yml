@@ -102,13 +102,47 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          cat > /tmp/release-notes.md <<'NOTES'
+          ## Installation
+
+          **Pre-built binary** (Linux amd64/arm64):
+
+          ```bash
+          curl -Lo modsec-exporter \
+            https://github.com/fretscha/modsec-exporter/releases/latest/download/modsec-exporter-linux-amd64
+          chmod +x modsec-exporter
+          ```
+
+          Verify the download:
+
+          ```bash
+          curl -sL https://github.com/fretscha/modsec-exporter/releases/latest/download/checksums.txt | sha256sum -c --ignore-missing
+          ```
+
+          **go install**:
+
+          ```bash
+          go install github.com/fretscha/modsec-exporter/cmd/modsec-exporter@latest
+          ```
+
+          ## What's included
+
+          | Asset | Description |
+          |---|---|
+          | `modsec-exporter-linux-amd64` | Main exporter, statically linked |
+          | `modsec-exporter-linux-arm64` | Main exporter, statically linked |
+          | `loggen-linux-amd64` | Synthetic log generator for testing |
+          | `loggen-linux-arm64` | Synthetic log generator for testing |
+          | `checksums.txt` | SHA-256 checksums for all binaries |
+          NOTES
+
           if gh release view "${GITHUB_REF_NAME}" &>/dev/null; then
             gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
-            gh release edit "${GITHUB_REF_NAME}" --latest
+            gh release edit "${GITHUB_REF_NAME}" --latest --notes-file /tmp/release-notes.md
           else
             gh release create "${GITHUB_REF_NAME}" \
               --title "${GITHUB_REF_NAME}" \
-              --generate-notes \
+              --notes-file /tmp/release-notes.md \
               --latest \
               dist/*
           fi
