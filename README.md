@@ -109,11 +109,13 @@ make smoke    # e2e replay smoke against test/fixtures
 make lint
 ```
 
-Smoke fixtures are gitignored. Copy them in before running:
+Smoke fixtures are gitignored. Generate them with the bundled `loggen` tool:
 
 ```bash
-cp /path/to/your/access.log test/fixtures/access.log
-cp /path/to/your/error.log  test/fixtures/error.log
+go run ./cmd/loggen \
+  --count 5000 \
+  --access-out test/fixtures/access.log \
+  --error-out  test/fixtures/error.log
 ```
 
 ## Container
