@@ -111,7 +111,6 @@ func (a *Aggregator) OnAccess(ev parser.AccessEvent) {
 	if ev.AnomalyScoreIn > 0 {
 		a.buf.RememberAccess(ev.UniqueID, join.AccessSummary{
 			StatusClass: sc,
-			Hostname:    ev.Hostname,
 		})
 	}
 	a.m.JoinBufferSize.WithLabelValues(a.site).Set(float64(a.buf.Size()))
@@ -137,7 +136,6 @@ func (a *Aggregator) OnError(ev parser.ErrorEvent) {
 		a.buf.Append(ev.UniqueID, join.Pending{
 			RuleID:   ev.RuleID,
 			Severity: ev.Severity,
-			Hostname: ev.Hostname,
 		})
 	}
 	a.m.JoinBufferSize.WithLabelValues(a.site).Set(float64(a.buf.Size()))
