@@ -26,8 +26,8 @@ type Metrics struct {
 
 	// (e) Operational
 	LinesParsed       *prometheus.CounterVec
-	JoinBufferSize    prometheus.Gauge
-	JoinBufferOrphans prometheus.Counter
+	JoinBufferSize    *prometheus.GaugeVec
+	JoinBufferOrphans *prometheus.CounterVec
 	GeoIPLookups      *prometheus.CounterVec
 	TailErrors        *prometheus.CounterVec
 	BuildInfo         *prometheus.GaugeVec
@@ -45,60 +45,60 @@ func New() *Metrics {
 	m.HTTPRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "http_requests_total",
 		Help: "HTTP requests observed in the access log.",
-	}, []string{"hostname", "method", "status_class"})
+	}, []string{"site", "method", "status_class"})
 
 	m.HTTPRequestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_request_duration_seconds",
 		Help:    "HTTP request duration as logged by Apache (%D, in seconds).",
 		Buckets: prometheus.DefBuckets,
-	}, []string{"hostname", "method", "status_class"})
+	}, []string{"site", "method", "status_class"})
 
 	m.HTTPResponseSize = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "http_response_size_bytes",
 		Help:    "HTTP response body size in bytes.",
 		Buckets: []float64{1024, 8192, 65536, 524288, 4194304, 33554432},
-	}, []string{"hostname", "status_class"})
+	}, []string{"site", "status_class"})
 
 	m.HTTPRequestsCountry = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "http_requests_by_country_total",
 		Help: "HTTP requests by source country (ISO-2; 'unknown' if not resolvable).",
-	}, []string{"hostname", "country", "status_class"})
+	}, []string{"site", "country", "status_class"})
 
 	m.ModsecRuleTriggered = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "modsec_rule_triggered_total",
 		Help: "Count of ModSecurity rule triggers from the error log.",
-	}, []string{"hostname", "rule_id", "severity", "paranoia_level"})
+	}, []string{"site", "rule_id", "severity", "paranoia_level"})
 
 	m.ModsecAnomalyScore = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "modsec_anomaly_score",
 		Help:    "Distribution of CRS anomaly scores per request (incoming/outgoing).",
 		Buckets: []float64{0, 1, 2, 3, 5, 7, 10, 15, 20, 30, 50, 100},
-	}, []string{"hostname", "direction"})
+	}, []string{"site", "direction"})
 
 	m.ModsecAttackCat = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "modsec_attack_category_total",
 		Help: "ModSecurity rule triggers by CRS attack-* tag.",
-	}, []string{"hostname", "category"})
+	}, []string{"site", "category"})
 
 	m.ModsecOutcome = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "modsec_request_outcome_total",
-		Help: "Joined: triggered rules grouped by access-log status_class. status_class=\"unknown\" denotes orphaned error events.",
-	}, []string{"hostname", "rule_id", "severity", "status_class"})
+		Help: `Joined: triggered rules grouped by access-log status_class. status_class="unknown" denotes orphaned error events.`,
+	}, []string{"site", "rule_id", "severity", "status_class"})
 
 	m.LinesParsed = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "modsec_exporter_log_lines_parsed_total",
 		Help: "Lines read from each log stream, by parse result.",
-	}, []string{"stream", "result"})
+	}, []string{"site", "stream", "result"})
 
-	m.JoinBufferSize = prometheus.NewGauge(prometheus.GaugeOpts{
+	m.JoinBufferSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "modsec_exporter_join_buffer_size",
 		Help: "Number of pending unique_ids in the correlation buffer.",
-	})
+	}, []string{"site"})
 
-	m.JoinBufferOrphans = prometheus.NewCounter(prometheus.CounterOpts{
+	m.JoinBufferOrphans = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "modsec_exporter_join_buffer_orphans_total",
 		Help: "Lifetime count of buffer entries evicted due to size overflow (not TTL).",
-	})
+	}, []string{"site"})
 
 	m.GeoIPLookups = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "modsec_exporter_geoip_lookups_total",
@@ -108,7 +108,7 @@ func New() *Metrics {
 	m.TailErrors = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "modsec_exporter_tail_errors_total",
 		Help: "File-tail errors (rotation, permissions, etc.).",
-	}, []string{"stream"})
+	}, []string{"site", "stream"})
 
 	m.BuildInfo = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "modsec_exporter_build_info",
