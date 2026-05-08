@@ -28,19 +28,22 @@ type ipStat struct {
 	ruleCount    int
 }
 
-// NewTopN creates a tracker capped at the given size. cap=0 makes the tracker a no-op.
-func NewTopN(cap int) *TopN {
+// NewTopN creates a tracker capped at the given size with site as a const label.
+// cap=0 makes the tracker a no-op.
+func NewTopN(cap int, site string) *TopN {
 	return &TopN{
 		cap:   cap,
 		stats: make(map[string]*ipStat),
 		descScore: prometheus.NewDesc(
 			"modsec_top_attacker_anomaly_score",
 			"Top-N attacking IPs by accumulated anomaly score.",
-			[]string{"client_ip", "country", "asn"}, nil),
+			[]string{"client_ip", "country", "asn"},
+			prometheus.Labels{"site": site}),
 		descRules: prometheus.NewDesc(
 			"modsec_top_attacker_rules_triggered",
 			"Top-N attacking IPs by rules-triggered count.",
-			[]string{"client_ip", "country", "asn"}, nil),
+			[]string{"client_ip", "country", "asn"},
+			prometheus.Labels{"site": site}),
 	}
 }
 
