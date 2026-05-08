@@ -57,15 +57,40 @@ make build
 
 | Flag | Env | Default | Notes |
 |---|---|---|---|
-| `--access-log` | `MODSEC_EXPORTER_ACCESS_LOG` | — | required |
-| `--error-log` | `MODSEC_EXPORTER_ERROR_LOG` | — | required |
+| `--config` | — | — | path to TOML config file; mutually exclusive with `--access-log`/`--error-log` |
+| `--access-log` | `MODSEC_EXPORTER_ACCESS_LOG` | — | single-site mode; required if `--config` not given |
+| `--error-log` | `MODSEC_EXPORTER_ERROR_LOG` | — | single-site mode; required if `--config` not given |
 | `--listen` | `MODSEC_EXPORTER_LISTEN` | `:9555` | |
 | `--mmdb` | `MODSEC_EXPORTER_MMDB` | `""` | empty disables GeoIP fallback |
-| `--top-n` | — | `50` | `0` disables |
-| `--buffer-size` | — | `50000` | join buffer cap |
+| `--top-n` | — | `50` | per site; `0` disables |
+| `--buffer-size` | — | `50000` | join buffer cap per site |
 | `--buffer-ttl` | — | `60s` | orphan threshold |
 | `--sweep-interval` | — | `10s` | TTL sweep cadence |
 | `--replay` | — | `false` | one-shot file read; metrics endpoint stays up until SIGINT/SIGTERM |
+
+## Multi-site configuration
+
+To monitor multiple Apache sites with one process, create a TOML config file:
+
+```toml
+[[site]]
+name       = "shop"
+access_log = "/var/log/apache2/shop-access.log"
+error_log  = "/var/log/apache2/shop-error.log"
+
+[[site]]
+name       = "blog"
+access_log = "/var/log/apache2/blog-access.log"
+error_log  = "/var/log/apache2/blog-error.log"
+```
+
+Then start the exporter with `--config`:
+
+```bash
+modsec-exporter --config /etc/modsec-exporter/sites.toml --listen :9555
+```
+
+All Prometheus metrics carry a `site` label (e.g. `site="shop"`). Each site gets its own join buffer and Top-N tracker; GeoIP and the HTTP endpoint are shared.
 
 ## Headline PromQL
 

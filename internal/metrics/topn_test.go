@@ -27,7 +27,7 @@ func gatherText(t *testing.T, r *prometheus.Registry) string {
 }
 
 func TestTopN_CapsAndOrders(t *testing.T) {
-	tn := NewTopN(3)
+	tn := NewTopN(3, "test")
 	tn.Observe("1.1.1.1", "US", "100", 5, 1)
 	tn.Observe("2.2.2.2", "DE", "200", 50, 4)
 	tn.Observe("3.3.3.3", "FR", "300", 10, 2)
@@ -48,7 +48,7 @@ func TestTopN_CapsAndOrders(t *testing.T) {
 }
 
 func TestTopN_ResetClearsState(t *testing.T) {
-	tn := NewTopN(2)
+	tn := NewTopN(2, "test")
 	tn.Observe("1.1.1.1", "US", "100", 5, 1)
 	tn.Reset()
 
@@ -60,7 +60,7 @@ func TestTopN_ResetClearsState(t *testing.T) {
 }
 
 func TestTopN_ZeroCapIsNoop(t *testing.T) {
-	tn := NewTopN(0)
+	tn := NewTopN(0, "test")
 	tn.Observe("1.1.1.1", "US", "100", 999, 999)
 	r := prometheus.NewRegistry()
 	r.MustRegister(tn)

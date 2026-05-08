@@ -21,23 +21,25 @@ type Config struct {
 	Now        func() time.Time
 }
 
-// Aggregator is the central event sink. Methods are safe for concurrent use.
+// Aggregator is the central event sink for one site. Methods are safe for concurrent use.
 type Aggregator struct {
 	m    *metrics.Metrics
 	gip  geoip.Lookup
 	buf  *join.Buffer
 	topN *metrics.TopN
+	site string
 
 	mu          sync.Mutex
 	lastEvicted uint64
 }
 
-// New constructs an Aggregator and, if cfg.TopN > 0, registers the Top-N collector.
-func New(m *metrics.Metrics, gip geoip.Lookup, cfg Config) *Aggregator {
+// New constructs an Aggregator for the named site and, if cfg.TopN > 0,
+// registers a bounded Top-N attacker collector in the shared registry.
+func New(m *metrics.Metrics, gip geoip.Lookup, cfg Config, site string) *Aggregator {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	tn := metrics.NewTopN(cfg.TopN)
+	tn := metrics.NewTopN(cfg.TopN, site)
 	if cfg.TopN > 0 {
 		m.Registry.MustRegister(tn)
 	}
@@ -46,6 +48,7 @@ func New(m *metrics.Metrics, gip geoip.Lookup, cfg Config) *Aggregator {
 		gip:  gip,
 		buf:  join.NewBuffer(cfg.BufferSize, cfg.BufferTTL, cfg.Now),
 		topN: tn,
+		site: site,
 	}
 }
 
@@ -53,10 +56,10 @@ func New(m *metrics.Metrics, gip geoip.Lookup, cfg Config) *Aggregator {
 func (a *Aggregator) OnRawAccess(line string) {
 	ev, err := parser.ParseAccess(line)
 	if err != nil {
-		a.m.LinesParsed.WithLabelValues("access", "parse_error").Inc()
+		a.m.LinesParsed.WithLabelValues(a.site, "access", "parse_error").Inc()
 		return
 	}
-	a.m.LinesParsed.WithLabelValues("access", "ok").Inc()
+	a.m.LinesParsed.WithLabelValues(a.site, "access", "ok").Inc()
 	a.OnAccess(ev)
 }
 
@@ -64,25 +67,24 @@ func (a *Aggregator) OnRawAccess(line string) {
 func (a *Aggregator) OnRawError(line string) {
 	ev, err := parser.ParseError(line)
 	if err != nil {
-		a.m.LinesParsed.WithLabelValues("error", "parse_error").Inc()
+		a.m.LinesParsed.WithLabelValues(a.site, "error", "parse_error").Inc()
 		return
 	}
-	a.m.LinesParsed.WithLabelValues("error", "ok").Inc()
+	a.m.LinesParsed.WithLabelValues(a.site, "error", "ok").Inc()
 	a.OnError(ev)
 }
 
 // OnAccess updates RED metrics and drains pending error events for this
 // unique_id. If no errors are buffered yet, remembers the access summary so a
-// late-arriving error event (in replay or out-of-order log shipping) can still
-// emit the joined outcome metric.
+// late-arriving error event can still emit the joined outcome metric.
 func (a *Aggregator) OnAccess(ev parser.AccessEvent) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	sc := metrics.StatusClass(ev.Status)
-	a.m.HTTPRequests.WithLabelValues(ev.Hostname, ev.Method, sc).Inc()
-	a.m.HTTPRequestDuration.WithLabelValues(ev.Hostname, ev.Method, sc).Observe(float64(ev.DurationUsec) / 1e6)
-	a.m.HTTPResponseSize.WithLabelValues(ev.Hostname, sc).Observe(float64(ev.ResponseBytes))
+	a.m.HTTPRequests.WithLabelValues(a.site, ev.Method, sc).Inc()
+	a.m.HTTPRequestDuration.WithLabelValues(a.site, ev.Method, sc).Observe(float64(ev.DurationUsec) / 1e6)
+	a.m.HTTPResponseSize.WithLabelValues(a.site, sc).Observe(float64(ev.ResponseBytes))
 
 	country := ev.Country
 	if country == "" {
@@ -97,31 +99,21 @@ func (a *Aggregator) OnAccess(ev parser.AccessEvent) {
 	if country == "" {
 		country = "unknown"
 	}
-	a.m.HTTPRequestsCountry.WithLabelValues(ev.Hostname, country, sc).Inc()
+	a.m.HTTPRequestsCountry.WithLabelValues(a.site, country, sc).Inc()
 
-	a.m.ModsecAnomalyScore.WithLabelValues(ev.Hostname, "incoming").Observe(float64(ev.AnomalyScoreIn))
-	a.m.ModsecAnomalyScore.WithLabelValues(ev.Hostname, "outgoing").Observe(float64(ev.AnomalyScoreOut))
+	a.m.ModsecAnomalyScore.WithLabelValues(a.site, "incoming").Observe(float64(ev.AnomalyScoreIn))
+	a.m.ModsecAnomalyScore.WithLabelValues(a.site, "outgoing").Observe(float64(ev.AnomalyScoreOut))
 
 	pending := a.buf.Drain(ev.UniqueID)
 	for _, p := range pending {
-		host := p.Hostname
-		if host == "" {
-			host = ev.Hostname
-		}
-		a.m.ModsecOutcome.WithLabelValues(host, p.RuleID, p.Severity, sc).Inc()
+		a.m.ModsecOutcome.WithLabelValues(a.site, p.RuleID, p.Severity, sc).Inc()
 	}
-	// If CRS scored this request, remember the access summary so any *late*
-	// error events (mixed ordering, log-flush quirks, replay races) can still
-	// join. Always remembered when score > 0, regardless of whether we just
-	// drained pending events — the same uid can have more errors arrive after.
-	// Benign requests (score=0) are skipped to keep the buffer focused.
 	if ev.AnomalyScoreIn > 0 {
 		a.buf.RememberAccess(ev.UniqueID, join.AccessSummary{
 			StatusClass: sc,
-			Hostname:    ev.Hostname,
 		})
 	}
-	a.m.JoinBufferSize.Set(float64(a.buf.Size()))
+	a.m.JoinBufferSize.WithLabelValues(a.site).Set(float64(a.buf.Size()))
 }
 
 // OnError updates rule metrics and stores the event in the join buffer.
@@ -133,42 +125,28 @@ func (a *Aggregator) OnError(ev parser.ErrorEvent) {
 	if pl == "" {
 		pl = "unknown"
 	}
-	a.m.ModsecRuleTriggered.WithLabelValues(ev.Hostname, ev.RuleID, ev.Severity, pl).Inc()
+	a.m.ModsecRuleTriggered.WithLabelValues(a.site, ev.RuleID, ev.Severity, pl).Inc()
 	for _, c := range ev.Categories {
-		a.m.ModsecAttackCat.WithLabelValues(ev.Hostname, c).Inc()
+		a.m.ModsecAttackCat.WithLabelValues(a.site, c).Inc()
 	}
 
-	// If the access entry already arrived (race / out-of-order / mixed
-	// ordering across multiple errors for the same uid), we can join now.
-	// Peek leaves the summary in place so subsequent errors for the same
-	// uid still match; TTL eviction is the eventual reaper.
 	if as := a.buf.PeekAccess(ev.UniqueID); as != nil {
-		host := ev.Hostname
-		if host == "" {
-			host = as.Hostname
-		}
-		a.m.ModsecOutcome.WithLabelValues(host, ev.RuleID, ev.Severity, as.StatusClass).Inc()
+		a.m.ModsecOutcome.WithLabelValues(a.site, ev.RuleID, ev.Severity, as.StatusClass).Inc()
 	} else {
 		a.buf.Append(ev.UniqueID, join.Pending{
 			RuleID:   ev.RuleID,
 			Severity: ev.Severity,
-			Hostname: ev.Hostname,
 		})
 	}
-	a.m.JoinBufferSize.Set(float64(a.buf.Size()))
+	a.m.JoinBufferSize.WithLabelValues(a.site).Set(float64(a.buf.Size()))
 
-	// Top-N: enrich country/ASN if a Lookup is available.
 	if a.topN != nil && ev.ClientIP != "" {
-		var country, asn string
 		r := a.gip.Lookup(net.ParseIP(ev.ClientIP))
-		country, asn = r.Country, r.ASN
-		// Severity-derived weight; we don't have the request's anomaly score on this side.
-		a.topN.Observe(ev.ClientIP, country, asn, severityWeight(ev.Severity), 1)
+		a.topN.Observe(ev.ClientIP, r.Country, r.ASN, severityWeight(ev.Severity), 1)
 	}
 
-	// Track buffer overflow as orphans counter (delta against lifetime total).
 	if e := a.buf.OrphansEvicted(); e > a.lastEvicted {
-		a.m.JoinBufferOrphans.Add(float64(e - a.lastEvicted))
+		a.m.JoinBufferOrphans.WithLabelValues(a.site).Add(float64(e - a.lastEvicted))
 		a.lastEvicted = e
 	}
 }
@@ -180,17 +158,12 @@ func (a *Aggregator) SweepOrphans() {
 	defer a.mu.Unlock()
 	for _, o := range a.buf.SweepExpired() {
 		for _, p := range o.Pending {
-			host := p.Hostname
-			if host == "" {
-				host = "unknown"
-			}
-			a.m.ModsecOutcome.WithLabelValues(host, p.RuleID, p.Severity, "unknown").Inc()
+			a.m.ModsecOutcome.WithLabelValues(a.site, p.RuleID, p.Severity, "unknown").Inc()
 		}
 	}
-	a.m.JoinBufferSize.Set(float64(a.buf.Size()))
+	a.m.JoinBufferSize.WithLabelValues(a.site).Set(float64(a.buf.Size()))
 }
 
-// severityWeight maps CRS severity strings to a small positive integer used for Top-N scoring.
 func severityWeight(s string) int {
 	switch s {
 	case "CRITICAL":

@@ -3,6 +3,7 @@ module github.com/fretscha/modsec-exporter
 go 1.26.2
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/nxadm/tail v1.4.11
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/prometheus/client_golang v1.23.2
