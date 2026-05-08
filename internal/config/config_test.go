@@ -98,3 +98,37 @@ error_log  = "/var/log/shop2/error.log"
 		t.Fatal("expected error for duplicate site name")
 	}
 }
+
+func TestLoad_MissingAccessLog(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sites.toml")
+	content := `
+[[site]]
+name      = "shop"
+error_log = "/var/log/shop/error.log"
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for missing access_log")
+	}
+}
+
+func TestLoad_MissingErrorLog(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sites.toml")
+	content := `
+[[site]]
+name       = "shop"
+access_log = "/var/log/shop/access.log"
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for missing error_log")
+	}
+}

@@ -43,7 +43,7 @@ func (c *Config) validate() error {
 	if len(c.Sites) == 0 {
 		return fmt.Errorf("at least one [[site]] entry is required")
 	}
-	seen := make(map[string]bool, len(c.Sites))
+	seen := make(map[string]struct{}, len(c.Sites))
 	for i, s := range c.Sites {
 		if s.Name == "" {
 			return fmt.Errorf("site[%d]: name is required", i)
@@ -54,10 +54,10 @@ func (c *Config) validate() error {
 		if s.ErrorLog == "" {
 			return fmt.Errorf("site %q: error_log is required", s.Name)
 		}
-		if seen[s.Name] {
+		if _, ok := seen[s.Name]; ok {
 			return fmt.Errorf("duplicate site name %q", s.Name)
 		}
-		seen[s.Name] = true
+		seen[s.Name] = struct{}{}
 	}
 	return nil
 }
