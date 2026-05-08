@@ -91,15 +91,15 @@ func TestReplayAgainstFixtures(t *testing.T) {
 	requireMin("modsec_rule_triggered_total", 100)
 	requireMin("modsec_request_outcome_total", 50)
 
-	if parseErrs := sumMetric(body, `modsec_exporter_log_lines_parsed_total{stream="access",result="parse_error"}`); parseErrs > 1000 {
+	if parseErrs := sumMetric(body, `modsec_exporter_log_lines_parsed_total{site="default",stream="access",result="parse_error"}`); parseErrs > 1000 {
 		t.Errorf("too many access parse errors: %.0f", parseErrs)
 	}
 	t.Logf("smoke summary: http_requests=%.0f rules=%.0f outcomes=%.0f access_parse_err=%.0f error_parse_err=%.0f",
 		sumMetric(body, "http_requests_total"),
 		sumMetric(body, "modsec_rule_triggered_total"),
 		sumMetric(body, "modsec_request_outcome_total"),
-		sumMetric(body, `modsec_exporter_log_lines_parsed_total{stream="access",result="parse_error"}`),
-		sumMetric(body, `modsec_exporter_log_lines_parsed_total{stream="error",result="parse_error"}`),
+		sumMetric(body, `modsec_exporter_log_lines_parsed_total{site="default",stream="access",result="parse_error"}`),
+		sumMetric(body, `modsec_exporter_log_lines_parsed_total{site="default",stream="error",result="parse_error"}`),
 	)
 }
 
